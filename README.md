@@ -21,7 +21,7 @@
 
 <br>
 
-<img src="https://img.shields.io/badge/profile%20views-1524-4f8cc9?style=flat" alt="profile views">
+<img src="https://komarev.com/ghpvc/?username=Marcelfedz&style=flat&color=4f8cc9&label=profile+views&base=1524" alt="profile views">
 
 </div>
 
@@ -52,7 +52,7 @@ I design and build agentic systems for clients, then turn what works into reusab
 <code><img title="LangChain" height="26" src="https://cdn.simpleicons.org/langchain/1C3C3C"></code>&nbsp;
 <code><img title="LangGraph" height="26" src="https://cdn.simpleicons.org/langgraph/1C3C3C"></code>&nbsp;
 <code><img title="Claude / Anthropic" height="26" src="https://cdn.simpleicons.org/anthropic/D97757"></code>&nbsp;
-<code><img title="OpenAI" height="26" src="https://cdn.simpleicons.org/openai/412991"></code>&nbsp;
+<code><img title="OpenAI" height="26" src="assets/logos/openai.svg"></code>&nbsp;
 <code><img title="Hugging Face" height="26" src="https://cdn.simpleicons.org/huggingface/FFD21E"></code>
 
 </div>
