@@ -22,12 +22,17 @@ from scipy.spatial.distance import cdist
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "assets/source/marcel.png"
+REFS = Path(__file__).resolve().parent / "refs"
 ASSETS = ROOT / "assets"
 LOGOS = Path(__file__).resolve().parent / "logos"
 DATA = Path(__file__).resolve().parent / "data"
 
-# Crop box picked for marcel.png (800x800, background already removed).
-CROP_BOX = (130, 40, 610, 600)
+# Crop box picked for marcel.png (800x800, background already removed) —
+# wider than a tight face crop so shoulders/chest carry into the dither too.
+CROP_BOX = (43, 20, 731, 800)
+
+# Fraction of dithered pixels kept — lowers dot density vs. a raw 1-bit fill.
+DOT_DENSITY = 0.6
 
 W, H = 1180, 610
 LOOP_SECONDS = 14.2
@@ -81,23 +86,59 @@ THEMES = {
 }
 
 
+def load_silhouette(path: Path, mode: str, fit: int) -> Image.Image:
+    """Load a reference image and return a 400px black-on-transparent silhouette.
+
+    mode "alpha": keep the source's own alpha channel as the shape (for logos that
+    already ship transparent backgrounds, e.g. the Anthropic mark).
+    mode "white_enclosed": the icon is white-on-solid-color (e.g. a brand pill),
+    and that same white also bleeds into the outer margin — so the icon is instead
+    identified as the white regions fully enclosed by the solid pill color (a
+    fill-holes pass on the non-white mask), which excludes the outer margin.
+    """
+    from scipy.ndimage import binary_fill_holes
+
+    size = 400
+    img = Image.open(path)
+    if mode == "alpha":
+        rgba = img.convert("RGBA")
+        mask = np.asarray(rgba.getchannel("A"))
+        alpha = (mask > 128).astype(np.uint8) * 255
+    else:
+        rgb = np.asarray(img.convert("RGB"))
+        white = (rgb[..., 0] > 200) & (rgb[..., 1] > 200) & (rgb[..., 2] > 200)
+        filled = binary_fill_holes(~white)
+        icon = filled & white
+        alpha = icon.astype(np.uint8) * 255
+
+    alpha_img = Image.fromarray(alpha, "L")
+    bbox = alpha_img.getbbox()
+    if bbox is None:
+        raise SystemExit(f"No shape found in {path}")
+    alpha_img = alpha_img.crop(bbox)
+    w, h = alpha_img.size
+    scale = fit / max(w, h)
+    new_size = (max(1, round(w * scale)), max(1, round(h * scale)))
+    alpha_img = alpha_img.resize(new_size, Image.Resampling.LANCZOS)
+
+    canvas = Image.new("L", (size, size), 0)
+    x0 = (size - new_size[0]) // 2
+    y0 = (size - new_size[1]) // 2
+    canvas.paste(alpha_img, (x0, y0))
+
+    out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    black = Image.new("RGBA", (size, size), (0, 0, 0, 255))
+    return Image.composite(black, out, canvas)
+
+
 def make_logos() -> dict[str, Image.Image]:
     """Create clean 400px black-on-transparent silhouette sources."""
     LOGOS.mkdir(parents=True, exist_ok=True)
     size = 400
     logos: dict[str, Image.Image] = {}
-    center = np.array([200.0, 200.0])
 
-    # Python-inspired two interlocking commas (simplified, single-color silhouette).
-    python_img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    d = ImageDraw.Draw(python_img)
-    d.rounded_rectangle((90, 60, 230, 190), radius=34, fill="black")
-    d.ellipse((70, 60, 110, 100), fill=(0, 0, 0, 0))
-    d.rounded_rectangle((170, 210, 310, 340), radius=34, fill="black")
-    d.ellipse((290, 300, 330, 340), fill=(0, 0, 0, 0))
-    d.ellipse((130, 100, 160, 130), fill=(0, 0, 0, 0))
-    d.ellipse((240, 270, 270, 300), fill=(0, 0, 0, 0))
-    logos["python"] = python_img
+    # LangChain mark: parrot + chain link, traced from the real logo artwork.
+    logos["langchain"] = load_silhouette(REFS / "langchain.png", mode="white_enclosed", fit=340)
 
     # Agent graph: nodes connected in a small network (LangGraph-style).
     graph = Image.new("RGBA", (size, size), (0, 0, 0, 0))
@@ -111,17 +152,8 @@ def make_logos() -> dict[str, Image.Image]:
         d.ellipse((x - r, y - r, x + r, y + r), fill="black")
     logos["graph"] = graph
 
-    # Anthropic-inspired angular star / spark mark.
-    spark = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    d = ImageDraw.Draw(spark)
-    star: list[tuple[float, float]] = []
-    for i in range(8):
-        a = -math.pi / 2 + i * math.pi / 4
-        radius = 150 if i % 2 == 0 else 55
-        star.append(tuple(center + radius * np.array([math.cos(a), math.sin(a)])))
-    d.polygon(star, fill="black")
-    d.ellipse((170, 170, 230, 230), fill=(0, 0, 0, 0))
-    logos["spark"] = spark
+    # Anthropic mark: traced from the real asterisk artwork (alpha already clean).
+    logos["spark"] = load_silhouette(REFS / "anthropic.png", mode="alpha", fit=300)
 
     for name, image in logos.items():
         image.save(LOGOS / f"{name}.png", optimize=True)
@@ -182,13 +214,15 @@ def portrait_points(theme: str, rng: np.random.Generator) -> np.ndarray:
     active = bits if select_lit else ~bits
     if theme == "dark":
         active &= alpha > 0.08
+    active &= rng.random(active.shape) < DOT_DENSITY
 
     ys, xs = np.where(active)
     if len(xs) == 0:
         return np.zeros((0, 2), dtype=np.float32)
     points = np.column_stack((74 + xs, 154 + ys)).astype(np.float32)
-    if len(points) > 18000:
-        points = points[rng.choice(len(points), 18000, replace=False)]
+    max_points = round(18000 * DOT_DENSITY)
+    if len(points) > max_points:
+        points = points[rng.choice(len(points), max_points, replace=False)]
     return points
 
 
@@ -258,13 +292,13 @@ def render_svg(
     t = THEMES[theme_name]
     n = min(TRAVELLER_COUNT, len(portrait))
     source = portrait[rng.choice(len(portrait), n, replace=False)]
-    python_f = transport(source, logo_points["python"][:n])
-    graph_f = transport(python_f, logo_points["graph"][:n])
+    langchain_f = transport(source, logo_points["langchain"][:n])
+    graph_f = transport(langchain_f, logo_points["graph"][:n])
     spark_f = transport(graph_f, logo_points["spark"][:n])
 
     times = [0, 3.0, 4.3, 6.3, 7.6, 9.6, 10.9, 12.9, 14.2]
     key_times = ";".join(num(v / LOOP_SECONDS) for v in times)
-    frames = [source, source, python_f, python_f, graph_f, graph_f, spark_f, spark_f, source]
+    frames = [source, source, langchain_f, langchain_f, graph_f, graph_f, spark_f, spark_f, source]
     opacity_values = "0;0;1;1;1;1;1;1;0"
 
     parts: list[str] = [
@@ -308,7 +342,7 @@ def render_svg(
         '<g opacity="1">',
     ]
 
-    target_centroid = python_f.mean(axis=0)
+    target_centroid = langchain_f.mean(axis=0)
     band_ids = rng.integers(0, 94, size=len(portrait))
     noise = rng.normal(0, 4, size=(94, 2))
     for band in range(94):
