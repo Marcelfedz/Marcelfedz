@@ -55,7 +55,7 @@ ROWS = [
     ("Core.Frontend", "React · Next.js"),
     ("Core.Infra", "Azure · Docker"),
     ("Grid.Mail", "marcelfernandez12@gmail.com"),
-    ("Grid.LinkedIn", "/in/marcel-fernández-serrano"),
+    ("Grid.LinkedIn", "/in/marcelfedz"),
     ("Grid.GitHub", "Marcelfedz"),
     ("Grid.Web", "marcelfedz.vercel.app"),
 ]

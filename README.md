@@ -16,12 +16,12 @@
 <br>
 
 <a href="https://marcelfedz.vercel.app/"><img src="https://img.shields.io/badge/Portfolio-0d1117?style=for-the-badge&logo=vercel&logoColor=4F8CC9" alt="Portfolio"></a>&nbsp;&nbsp;
-<a href="https://www.linkedin.com/in/marcel-fern%C3%A1ndez-serrano/"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"></a>&nbsp;&nbsp;
+<a href="https://www.linkedin.com/in/marcelfedz/"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"></a>&nbsp;&nbsp;
 <a href="mailto:marcelfernandez12@gmail.com"><img src="https://img.shields.io/badge/Email-0d1117?style=for-the-badge&logo=gmail&logoColor=D14836" alt="Email"></a>
 
 <br>
 
-<img src="https://komarev.com/ghpvc/?username=Marcelfedz&style=flat&color=4f8cc9&label=profile+views" alt="profile views">
+<img src="https://img.shields.io/badge/profile%20views-1524-4f8cc9?style=flat" alt="profile views">
 
 </div>
 
