@@ -31,8 +31,10 @@ DATA = Path(__file__).resolve().parent / "data"
 # wider than a tight face crop so shoulders/chest carry into the dither too.
 CROP_BOX = (43, 20, 731, 800)
 
-# Fraction of dithered pixels kept — lowers dot density vs. a raw 1-bit fill.
-DOT_DENSITY = 0.6
+# Portrait dither resolution as a fraction of the 300x340 target grid — lowers
+# dot density while keeping Floyd-Steinberg's own error diffusion in charge of
+# where dots land (see portrait_points).
+DOT_DENSITY = 0.65
 
 W, H = 1180, 610
 LOOP_SECONDS = 14.2
@@ -187,9 +189,20 @@ def floyd_steinberg(gray: np.ndarray) -> np.ndarray:
 
 
 def portrait_points(theme: str, rng: np.random.Generator) -> np.ndarray:
-    """Return sampled x/y banner coordinates from a 300x340 dither grid."""
+    """Return sampled x/y banner coordinates from a dither grid.
+
+    Density is controlled by dithering at a *lower* working resolution
+    (DOT_DENSITY scales the 300x340 target grid down before thresholding) rather
+    than by randomly dropping pixels afterwards — random post-hoc thinning erases
+    thin, low-pixel-count features (eyes, nostrils) almost entirely, since they
+    have too few pixels to survive a uniform drop. Dithering at the intended
+    resolution keeps Floyd-Steinberg's own error diffusion doing the sparsifying,
+    which preserves those features as a few well-placed dots instead of noise.
+    """
+    work_w = max(1, round(300 * DOT_DENSITY))
+    work_h = max(1, round(340 * DOT_DENSITY))
     source = Image.open(SOURCE).convert("RGBA")
-    crop = source.crop(CROP_BOX).resize((300, 340), Image.Resampling.LANCZOS)
+    crop = source.crop(CROP_BOX).resize((work_w, work_h), Image.Resampling.LANCZOS)
     rgb = crop.convert("RGB")
     alpha = np.asarray(crop.getchannel("A"), dtype=np.float32) / 255.0
 
@@ -209,20 +222,21 @@ def portrait_points(theme: str, rng: np.random.Generator) -> np.ndarray:
     else:
         prepared = ImageOps.autocontrast(prepared, cutoff=1)
     prepared = ImageEnhance.Contrast(prepared).enhance(1.35)
-    prepared = prepared.filter(ImageFilter.UnsharpMask(radius=2, percent=175, threshold=1))
+    unsharp_radius = max(1, round(2 * DOT_DENSITY))
+    prepared = prepared.filter(ImageFilter.UnsharpMask(radius=unsharp_radius, percent=175, threshold=1))
     bits = floyd_steinberg(np.asarray(prepared))
     active = bits if select_lit else ~bits
     if theme == "dark":
         active &= alpha > 0.08
-    active &= rng.random(active.shape) < DOT_DENSITY
 
     ys, xs = np.where(active)
     if len(xs) == 0:
         return np.zeros((0, 2), dtype=np.float32)
-    points = np.column_stack((74 + xs, 154 + ys)).astype(np.float32)
-    max_points = round(18000 * DOT_DENSITY)
-    if len(points) > max_points:
-        points = points[rng.choice(len(points), max_points, replace=False)]
+    points = np.column_stack(
+        (74 + xs / DOT_DENSITY, 154 + ys / DOT_DENSITY)
+    ).astype(np.float32)
+    if len(points) > 18000:
+        points = points[rng.choice(len(points), 18000, replace=False)]
     return points
 
 
